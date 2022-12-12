@@ -8,7 +8,7 @@ library(foreach)
 library(tidyverse)
 
 # local testing ----------------------------------------------------------------
-TEST = TRUE
+TEST = FALSE
 
 # helper functions -------------------------------------------------------------
 #
