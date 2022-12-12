@@ -179,7 +179,7 @@ x = foreach(
 }
 
 # convert rna vcf to gds
-if(tools::file_ext(opt$rna) == 'vcf'){
+if(tools::file_ext(opt$rna) == 'vcf' | tools::file_ext(opt$rna) == 'gz'){
   gds_filename = str_replace(basename(opt$rna),'vcf','gds')
   if(!file.exists(gds_filename)){
     message('creating gds file')
