@@ -109,34 +109,41 @@ tidy_geno_mat = function(gds_obj,source,sample,chr){
 parser <- OptionParser()
 parser <- add_option(parser, c("-v", "--verbose"), action="store_true",
                      default=TRUE, help="Print extra output [default]")
+
 parser <- add_option(parser, c("-q", "--quietly"), action="store_false",
                      dest="verbose", help="Print little output")
+
 parser <- add_option(parser, c("--chr"), type="character",
                      default="",
                      help="chromomsome on which to extract overlap data",
-                    metavar ="'sample.id'")
+                     metavar="'chr1'")
+
 parser <- add_option(parser, c("--rna"), type="character",
                      default="",
                      help="path to rna gds file",
                      metavar="'/path/to/rna.gds'")
+
 parser <- add_option(parser, c("--dna"), type="character",
                      default="",
                      help="path to dna gds file",
                      metavar="'/path/to/dna.gds'")
+
 parser <- add_option(parser, c("--write_full_comparison"),
                      action = "store_true",
-                      metavar="'chr1'")
+                     help="set this to output both the full sample to sample
+                      comparison and the similarity summary",
+                     default=FALSE)
+
 parser <- add_option(parser, c('--rna_sample'), type="character",
                     default="",
                     help="sample id used to extract data from the rna gds files",
                     metavar ="'sample.id'")
+
 parser <- add_option(parser, c('--dna_sample'), type="character",
                     default="",
                     help="sample id used to extract data from the dna gds files",
-                    default = FALSE,
-                     help="set this to output both the full sample to sample
-                      comparison and the similarity summary",
-                     metavar="'.'")
+                    metavar="'sample.id'")
+
 parser <- add_option(parser, c("--output_prefix"), type="character",
                      default=".",
                      help="output location",
@@ -255,20 +262,21 @@ sample_similarity_metric = tibble(
 )
 
 output_dir  = paste('rna',opt$rna_sample,'dna',opt$rna_sample,sep="_")
-file_name = opt$chr
+dir.create(output_dir,showWarnings=FALSE)
+file_name = paste0('chr',opt$chr)
 
 # write full comparison df if -f is set
 if(opt$write_full_comparison){
   write_csv(compare_df,
             file.path(opt$output_prefix,
                       output_dir,
-                      paste0(output_name,"_comparison.csv")))
+                      paste0(file_name,"_comparison.csv")))
 }
 # write summarized match metric
 write_csv(sample_similarity_metric,
           file.path(opt$output_prefix,
                     output_dir,
-                    paste0(output_name,"_match_metrics.csv")))
+                    paste0(file_name,"_match_metrics.csv")))
 
 # this is part of profvis -- uncomment this for resource profiling during testing
 # })
