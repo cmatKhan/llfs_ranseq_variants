@@ -178,6 +178,16 @@ x = foreach(
   }
 }
 
+# convert rna vcf to gds
+if(tools::file_ext(opt$rna) == 'vcf'){
+  gds_filename = str_replace(basename(opt$rna),'vcf','gds')
+  if(!file.exists(gds_filename)){
+    message('creating gds file')
+    seqVCF2GDS(opt$rna,gds_filename)
+  }
+  opt$rna=gds_filename
+}
+
 # uncomment this to profile the process
 # p <- profvis({
 # memory profiling result for chr21 shows max usage at 350MB
