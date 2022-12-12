@@ -1,13 +1,17 @@
 #!/usr/bin/env Rscript
 
+# Dependencies ----------------------------------------------------------------
 library(optparse)
 library(SeqArray)
 library(SeqVarTools)
 library(foreach)
 library(tidyverse)
 
+# local testing ----------------------------------------------------------------
 TEST = TRUE
 
+# helper functions -------------------------------------------------------------
+#
 #' set chromosome and sample filter on gds obj
 #'
 #' @param gds_obj an open gds obj
@@ -94,47 +98,51 @@ tidy_geno_mat = function(gds_obj,source,sample,chr){
         dplyr::select(var_id,start) %>%
         dplyr::rename(pos=start)) %>%
     mutate(chr=chr) %>%
-    dplyr::select(chr,pos,source_sample_colname,all_of(source)) %>%
+    dplyr::select(chr,pos,all_of(source_sample_colname),all_of(source)) %>%
     mutate(!!rlang::sym(total_depth_colname) := total_depth,
            !!rlang::sym(alt_depth_colname) := alt_depth,
            !!rlang::sym(genotype_qual_colname) := genotype_qual)
 }
+
+# cmd line argument parser -----------------------------------------------------
 
 parser <- OptionParser()
 parser <- add_option(parser, c("-v", "--verbose"), action="store_true",
                      default=TRUE, help="Print extra output [default]")
 parser <- add_option(parser, c("-q", "--quietly"), action="store_false",
                      dest="verbose", help="Print little output")
-parser <- add_option(parser, c("-c", "--chr"), type="character",
+parser <- add_option(parser, c("--chr"), type="character",
                      default="",
                      help="chromomsome on which to extract overlap data",
-                     metavar="'chr1'")
-parser <- add_option(parser, c('-1','--rna_sample'), type="character",
-                    default="",
-                    help="sample id used to extract data from the rna gds files",
                     metavar ="'sample.id'")
-parser <- add_option(parser, c('-2','--dna_sample'), type="character",
-                    default="",
-                    help="sample id used to extract data from the dna gds files",
-                    metavar ="'sample.id'")
-parser <- add_option(parser, c("-r", "--rna"), type="character",
+parser <- add_option(parser, c("--rna"), type="character",
                      default="",
                      help="path to rna gds file",
                      metavar="'/path/to/rna.gds'")
-parser <- add_option(parser, c("-d", "--dna"), type="character",
+parser <- add_option(parser, c("--dna"), type="character",
                      default="",
                      help="path to dna gds file",
                      metavar="'/path/to/dna.gds'")
-parser <- add_option(parser, c("-f", "--write_full_comparison"),
+parser <- add_option(parser, c("--write_full_comparison"),
                      action = "store_true",
-                     default = FALSE,
-                     help="set this to output both the full sample to sample comparison and the similarity summary",
+                      metavar="'chr1'")
+parser <- add_option(parser, c('--rna_sample'), type="character",
+                    default="",
+                    help="sample id used to extract data from the rna gds files",
+                    metavar ="'sample.id'")
+parser <- add_option(parser, c('--dna_sample'), type="character",
+                    default="",
+                    help="sample id used to extract data from the dna gds files",
+                    default = FALSE,
+                     help="set this to output both the full sample to sample
+                      comparison and the similarity summary",
                      metavar="'.'")
-parser <- add_option(parser, c("-o", "--output_prefix"), type="character",
+parser <- add_option(parser, c("--output_prefix"), type="character",
                      default=".",
                      help="output location",
                      metavar="'.'")
 
+# main -------------------------------------------------------------------------
 
 opt = if(TEST){
   parse_args(parser,
@@ -146,7 +154,7 @@ opt = if(TEST){
              "--dna=/home/oguzkhan/projects/llfs_rnaseq_kinship/data/LLFS.WGS.freeze5.chr21.gds",
              "--rna=/home/oguzkhan/projects/llfs_rnaseq_kinship/data/1086.fltr.gds"))
 } else{
-  parse_args(OptionParser(option_list=option_list))
+  parse_args(parser)
 }
 
 # check cmd line arguments
@@ -163,18 +171,23 @@ x = foreach(
   }
 }
 
+# uncomment this to profile the process
+# p <- profvis({
+# memory profiling result for chr21 shows max usage at 350MB
+# time at 36 seconds
+
 # open gds files
 gds_list = list(
   rna = seqOpen(opt$rna,allow.duplicate = TRUE),
   dna = seqOpen(opt$dna,allow.duplicate = TRUE)
 )
 
-gds_list$rna = set_initial_gds_filters(
+set_initial_gds_filters(
   gds_list$rna,
   opt$chr,
   opt$rna_sample)
 
-gds_list$dna = set_initial_gds_filters(
+set_initial_gds_filters(
   gds_list$dna,
   opt$chr,
   opt$dna_sample)
@@ -241,11 +254,23 @@ sample_similarity_metric = tibble(
   homo_expr_cand_fltr = homo_expr_cand_fltr
 )
 
-output_name = paste('rna',opt$rna_sample,'dna',opt$rna_sample,sep='_')
+output_dir  = paste('rna',opt$rna_sample,'dna',opt$rna_sample,sep="_")
+file_name = opt$chr
+
 # write full comparison df if -f is set
 if(opt$write_full_comparison){
-  write_csv(compare_df,file.path(opt$output_prefix,paste0(output_name,"_comparison.csv")))
+  write_csv(compare_df,
+            file.path(opt$output_prefix,
+                      output_dir,
+                      paste0(output_name,"_comparison.csv")))
 }
 # write summarized match metric
-write_csv(sample_similarity_metric,file.path(opt$output_prefix,paste0(output_name,"_match_metrics.csv")))
+write_csv(sample_similarity_metric,
+          file.path(opt$output_prefix,
+                    output_dir,
+                    paste0(output_name,"_match_metrics.csv")))
+
+# this is part of profvis -- uncomment this for resource profiling during testing
+# })
+# print(p)
 

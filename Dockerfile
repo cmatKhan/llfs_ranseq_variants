@@ -10,6 +10,8 @@ RUN  apt-get update && \
       dirmngr \
       wget \
 	    build-essential \
+	    libssl-dev \
+	    libxml2-dev \
       libcurl4-openssl-dev
 
 # Clean up
