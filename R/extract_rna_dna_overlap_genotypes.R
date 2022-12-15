@@ -276,7 +276,7 @@ sample_similarity_metric = tibble(
   homo_expr_cand_fltr = homo_expr_cand_fltr
 )
 
-output_dir  = paste('rna',opt$rna_sample,'dna',opt$rna_sample,sep="_")
+output_dir  = paste('rna',opt$rna_sample,'dna',opt$dna_sample,sep="_")
 dir.create(output_dir,showWarnings=FALSE)
 file_name = paste0('chr',opt$chr)
 

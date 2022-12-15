@@ -79,3 +79,14 @@ compare_df = tidy_geno_mat(file,'rnaseq') %>%
 
 # sum(compare_vector[!is.na(compare_vector)]) / length(compare_vector[!is.na(compare_vector)])
 # [1] 0.8335855
+
+compare_results = Sys.glob("/mnt/scratch/llfs_rna_dna_compare_test/*/*_match_metrics.csv")
+
+compare_results_df = map(compare_results,read_csv) %>%
+  do.call('rbind',.)
+
+compare_results_df %>%
+  mutate(same_sample = dna_sample==rna_sample) %>%
+  filter(same_sample == TRUE) %>%
+  head(100) %>%
+  View()
