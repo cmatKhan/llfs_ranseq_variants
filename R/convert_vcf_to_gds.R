@@ -26,6 +26,8 @@ parser <- add_option(parser, c("--output_prefix"), type="character",
 
 # main -------------------------------------------------------------------------
 
+opt = parse_args(parser)
+
 # check cmd line arguments
 x = foreach(
   i = names(opt)
