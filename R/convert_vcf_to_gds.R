@@ -2,6 +2,7 @@
 
 library(optparse)
 library(SeqArray)
+library(foreach)
 
 
 # arg parser -------------------------------------------------------------------
