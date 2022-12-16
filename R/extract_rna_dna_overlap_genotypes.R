@@ -178,20 +178,11 @@ x = foreach(
   }
 }
 
-message(sprintf("rna_sample: %s; dna_sample: %s; chr: %s",
+if(opt$verbose){
+  message(sprintf("rna_sample: %s; dna_sample: %s; chr: %s",
                 opt$rna_sample,opt$dna_sample,opt$chr))
-
-# convert rna vcf to gds
-if(tools::file_ext(opt$rna) == 'vcf' | tools::file_ext(opt$rna) == 'gz'){
-  gds_filename = str_replace_all(basename(opt$rna),'.vcf.gz|.vcf','.gds')
-  if(!file.exists(gds_filename)){
-    message('creating gds file')
-    seqVCF2GDS(opt$rna,gds_filename)
-  }
-  opt$rna=gds_filename
 }
 
-message(sprintf("rna_gds: %s", opt$rna))
 
 # uncomment this to profile the process
 # p <- profvis({

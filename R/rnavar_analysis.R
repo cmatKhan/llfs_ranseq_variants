@@ -15,6 +15,8 @@ library(tidyverse)
 #   parallel=TRUE,
 #   verbose = TRUE)
 
+pedigree = read_csv("data/triplet_visit2_version3.csv")
+
 file = seqOpen("data/1086.fltr.gds")
 seqSetFilterChrom(file,21L)
 
@@ -85,8 +87,31 @@ compare_results = Sys.glob("/mnt/scratch/llfs_rna_dna_compare_test/*/*_match_met
 compare_results_df = map(compare_results,read_csv) %>%
   do.call('rbind',.)
 
+x = compare_results_df %>%
+  left_join(distinct(pedigree,subject,gpedid,relative,control),by = c('rna_sample' = 'subject')) %>%
+  dplyr::rename(rna_ped = gpedid,rna_related = relative, rna_control = control) %>%
+  left_join(distinct(pedigree,subject,gpedid,relative,control),by = c('dna_sample' = 'subject')) %>%
+  dplyr::rename(dna_ped = gpedid,dna_related = relative, dna_control = control)
+
 compare_results_df %>%
-  mutate(same_sample = dna_sample==rna_sample) %>%
-  filter(same_sample == TRUE) %>%
-  head(100) %>%
-  View()
+  group_by(dna_sample,rna_sample) %>%
+  mutate(same_sample = rna_sample==dna_sample) %>%
+  ggplot(aes(same_sample,filtered_match_ratio)) + geom_boxplot() +
+  ggtitle('chr1-22') +
+  coord_cartesian(ylim =  c(0,1))
+
+x = x %>%
+  group_by(dna_sample,rna_sample) %>%
+  mutate(comparison = ifelse(rna_sample==dna_sample,'Identical',ifelse(rna_ped==dna_ped,'Family','Diff_Family')))
+
+x %>%
+  ggplot(aes(comparison,filtered_match_ratio)) + geom_boxplot() +
+  ggtitle('chr1-22') +
+  coord_cartesian(ylim =  c(0,1))
+
+compare_results_df %>%
+  filter(chr=='21') %>%
+  mutate(same_sample = rna_sample==dna_sample) %>%
+  ggplot(aes(same_sample,filtered_match_ratio)) + geom_boxplot() +
+  ggtitle('chr 21 only') +
+  coord_cartesian(ylim =  c(0,1))
