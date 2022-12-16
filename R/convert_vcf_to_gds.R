@@ -2,6 +2,7 @@
 
 library(optparse)
 library(SeqArray)
+library(tidyverse)
 library(foreach)
 
 
