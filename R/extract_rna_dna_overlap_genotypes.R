@@ -8,7 +8,7 @@ library(foreach)
 library(tidyverse)
 
 # local testing ----------------------------------------------------------------
-TEST = FALSE
+TEST = TRUE
 
 # helper functions -------------------------------------------------------------
 #
@@ -26,6 +26,8 @@ set_initial_gds_filters = function(gds_obj,chr,sample_id){
   seqSetFilterChrom(gds_obj,as.numeric(chr))
   seqSetFilter(gds_obj,sample.id=as.character(sample_id))
   set_variant_filter(gds_obj)
+
+  length(nAlleles(gds_obj))
 }
 
 #' set variant level filters, currently such that only variants with 1
@@ -65,6 +67,8 @@ set_overlap_filter = function(gds_list){
     gds_list$dna,
     as.numeric(opt$chr),
     pos=var_overlap@ranges@start)
+
+  length(nAlleles(gds_list$rna))
 }
 
 #' extract genotype matrix, tidy and return as tibble
@@ -195,18 +199,18 @@ gds_list = list(
   dna = seqOpen(opt$dna,allow.duplicate = TRUE)
 )
 
-set_initial_gds_filters(
+init_rna_var_n = set_initial_gds_filters(
   gds_list$rna,
   opt$chr,
   opt$rna_sample)
 
-set_initial_gds_filters(
+init_dna_var_n = set_initial_gds_filters(
   gds_list$dna,
   opt$chr,
   opt$dna_sample)
 
 # apply position filter based on overlapping variants
-set_overlap_filter(gds_list)
+overlap_var_n = set_overlap_filter(gds_list)
 
 # extract data
 compare_df = tidy_geno_mat(gds_list$rna,'rna',opt$rna_sample,opt$chr) %>%
@@ -235,10 +239,12 @@ comparison_summary_fltr = compare_df %>%
          depth_filter=depth_fltr,
          gq_filter = gq_fltr)
 
-unfiltered_match_ratio = (comparison_summary_unfltr %>%
+unfilter_match_n = comparison_summary_unfltr %>%
   filter(homo_match==TRUE | hetero_match==TRUE) %>%
   pull(n) %>%
-  sum() / sum(comparison_summary_unfltr$n)) %>%
+  sum()
+
+unfiltered_match_ratio = unfilter_match_n / sum(comparison_summary_unfltr$n) %>%
   round(.,digits=4)
 
 homo_expr_cand_unfltr = comparison_summary_unfltr %>%
@@ -246,10 +252,12 @@ homo_expr_cand_unfltr = comparison_summary_unfltr %>%
   pull(n) %>%
   ifelse(identical(.,integer(0)),0,.)
 
-filtered_match_ratio = (comparison_summary_fltr %>%
+filtered_match_n = comparison_summary_fltr %>%
   filter(homo_match==TRUE | hetero_match==TRUE) %>%
   pull(n) %>%
-  sum() / sum(comparison_summary_fltr$n)) %>%
+  sum()
+
+filtered_match_ratio = filtered_match_n / sum(comparison_summary_fltr$n) %>%
   round(.,digits=4)
 
 homo_expr_cand_fltr = comparison_summary_fltr %>%
@@ -261,9 +269,13 @@ sample_similarity_metric = tibble(
   chr = opt$chr,
   dna_sample = opt$dna_sample,
   rna_sample = opt$rna_sample,
-  unfiltered_match_ratio = unfiltered_match_ratio,
-  homo_expr_cand_unfltr = homo_expr_cand_unfltr,
-  filtered_match_ratio = filtered_match_ratio,
+  dna_var_n = init_dna_var_n,
+  rna_var_n = init_rna_var_n,
+  overlap_var_n = overlap_var_n,
+  overlap_unfltr = sum(comparison_summary_unfltr$n),
+  overlap_fltr = sum(comparison_summary_fltr$n),
+  n_match_unfltr = unfilter_match_n,
+  n_match_fltr = filtered_match_n,
   homo_expr_cand_fltr = homo_expr_cand_fltr
 )
 
