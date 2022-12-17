@@ -112,14 +112,18 @@ create_sex_mislabels_comparison = function(row){
 sex_mislabel_tmp = map(seq(1,nrow(suspicious_sex_samples_set)),~create_sex_mislabels_comparison(suspicious_sex_samples_set[.,])) %>%
   do.call('rbind',.)
 
-sex_mislabel_tmp %>%
-  mutate(rna = file.path('/scratch/mblab/chasem/llfs_variant_calling/results/variant_calling',
-paste0(rna_sample,"_T1"),
-paste0(rna_sample,"_T1",".haplotypecaller.filtered.vcf.gz"))) %>%
+sex_mislabel_lookup = sex_mislabel_tmp %>%
+  mutate(rna = file.path('/scratch/mblab/chasem/llfs_rna_dna_compare_test',
+                         paste0(rna_subject,"_T1",".haplotypecaller.filtered.gds"))) %>%
   mutate(count = rep(22,nrow(sex_mislabel_tmp))) %>%
   uncount(count) %>%
   group_by(rna_subject,dna_subject) %>%
   mutate(chr=row_number(),
          dna=file.path('/scratch/mblab/lisa.liao/human/staar/src/custom_scripts/agds',
-                       paste0('LLFS.WGS.freeze5.chr',row_number(),'.gds')))
+                       paste0('LLFS.WGS.freeze5.chr',row_number(),'.gds'))) %>%
+  dplyr::select(rna_subject,dna_subject,rna,chr,dna)
+
+write_tsv(sex_mislabel_lookup,
+          "/mnt/scratch/llfs_rna_dna_compare_test/sex_mislabel_compare_lookup.tsv",
+          col_names = FALSE)
 
