@@ -272,11 +272,11 @@ homo_expr_cand_fltr = comparison_summary_fltr %>%
 
 sample_similarity_metric = tibble(
   chr = opt$chr,
-  dna_sample = opt$dna_sample,
   rna_sample = opt$rna_sample,
   rna_visit = opt$rna_visit,
-  dna_var_n = init_dna_var_n,
+  dna_sample = opt$dna_sample,
   rna_var_n = init_rna_var_n,
+  dna_var_n = init_dna_var_n,
   overlap_var_n = overlap_var_n,
   overlap_unfltr = sum(comparison_summary_unfltr$n),
   overlap_fltr = sum(comparison_summary_fltr$n),
