@@ -274,7 +274,7 @@ sample_similarity_metric = tibble(
   chr = opt$chr,
   dna_sample = opt$dna_sample,
   rna_sample = opt$rna_sample,
-  rna_visit = opt$visit,
+  rna_visit = opt$rna_visit,
   dna_var_n = init_dna_var_n,
   rna_var_n = init_rna_var_n,
   overlap_var_n = overlap_var_n,
@@ -287,7 +287,7 @@ sample_similarity_metric = tibble(
 
 output_dir  = paste('rna',opt$rna_sample,'dna',opt$dna_sample,sep="_")
 dir.create(output_dir,showWarnings=FALSE)
-file_name = paste0('rna_visit_', opt$visit, '_', 'chr',opt$chr)
+file_name = paste0('rna_visit_', opt$rna_visit, '_', 'chr',opt$chr)
 
 # write full comparison df if -f is set
 if(opt$write_full_comparison){
