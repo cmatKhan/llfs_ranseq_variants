@@ -285,9 +285,9 @@ sample_similarity_metric = tibble(
   homo_expr_cand_fltr = homo_expr_cand_fltr
 )
 
-output_dir  = paste('rna',opt$rna_sample,'dna',opt$dna_sample,sep="_")
+output_dir  = paste('rna',opt$rna_sample,sep="_")
 dir.create(output_dir,showWarnings=FALSE)
-file_name = paste0('rna_visit_', opt$rna_visit, '_', 'chr',opt$chr)
+file_name = paste('visit', opt$rna_visit, 'chr',opt$chr, opt$dna_sample, sep = "_")
 
 # write full comparison df if -f is set
 if(opt$write_full_comparison){

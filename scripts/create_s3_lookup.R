@@ -26,6 +26,20 @@ bam_df = df %>%
       filter(!is.na(subject))) %>%
   left_join(pedigree)
 
+visit_1_bam_df = bam_df %>%
+  filter(visit == 'visit1')
+
+chunk <- 60
+n <- nrow(visit_1_bam_df)
+r  <- rep(1:ceiling(n/chunk),each=chunk)[1:n]
+visit_1_bam_split <- split(visit_1_bam_df,r)
+
+map(names(visit_1_bam_split),
+    ~write_csv(select(visit_1_bam_split[[.]],'path'),
+               file.path("/mnt/scratch/llfs_variant_calling/lookups",
+                         paste0("chunk_",as.character(.))),
+               col_names = FALSE))
+
 suspicious_sex_samples_set = suspicious_sex_samples %>%
   left_join(bam_df,by=c('id','subject','visit','sex'))
 
@@ -73,10 +87,11 @@ create_samplesheet_from_dir = function(bam_list, include_visit=FALSE){
     dplyr::select(df,sample,fastq_1,fastq_2,strandedness,bam)
 }
 
-bam_list = Sys.glob('/mnt/scratch/llfs_variant_calling/data/sex_mislabels/*bam')
-sex_mislabel_samplesheet = create_samplesheet_from_dir(bam_list, include_visit = TRUE)
+chunk='chunk_3'
+bam_list = Sys.glob(paste0('/mnt/scratch/llfs_variant_calling/data/',chunk,'/*bam'))
+visit_chunk_samplesheet = create_samplesheet_from_dir(bam_list, include_visit = TRUE)
 
-# write_csv(sex_mislabel_samplesheet, "/mnt/scratch/llfs_variant_calling/sex_mislabel_samplesheet.csv")
+write_csv(visit_chunk_samplesheet, paste0("/mnt/scratch/llfs_variant_calling/samplesheet/visit_1_",chunk,"_samplesheet.csv"))
 #
 
 # samplesheet_df = tibble(bam=Sys.glob("/mnt/scratch/llfs_variant_calling/data/llfs_test_set/*bam")) %>%
@@ -95,10 +110,19 @@ sex_mislabel_samplesheet = create_samplesheet_from_dir(bam_list, include_visit =
 # write_csv(samplesheet_df,"/mnt/scratch/llfs_variant_calling/llfs_test_samplesheet.csv")
 
 create_sex_mislabels_comparison = function(row){
+
   row = as.data.frame(row)
-  pedigree %>%
+
+  out = pedigree %>%
     filter(gpedid == row[['gpedid']],
-           as.numeric(control) != as.numeric(row[['control']])) %>%
+           as.numeric(control) != as.numeric(row[['control']]))
+
+  if(nrow(out) == 0){
+    out = pedigree %>%
+      filter(gpedid == row[['gpedid']])
+  }
+
+  out %>%
     dplyr::select(subject,gpedid,control) %>%
     dplyr::rename(dna_subject = subject, dna_control = control) %>%
     left_join(row %>%
@@ -107,14 +131,69 @@ create_sex_mislabels_comparison = function(row){
               by='gpedid')
 }
 
+source("R/expand_grid_unique.R")
 
+all_by_all_comparison = function(row, dna_subjects){
+  rna_subject = row['subject']
 
-sex_mislabel_tmp = map(seq(1,nrow(suspicious_sex_samples_set)),~create_sex_mislabels_comparison(suspicious_sex_samples_set[.,])) %>%
+  expand_grid_unique(rna_subject,dna_subjects) %>%
+    as_tibble() %>%
+    dplyr::rename(rna_subject = subject, dna_subject = z) %>%
+    mutate(visit = row[['visit']])
+}
+
+comparison_lookup_maker = function(rna_dna_compare_df){
+
+  rna_dna_compare_df %>%
+    mutate(rna = file.path(
+      '/scratch/mblab/chasem/llfs_rna_dna_compare_test',
+      paste0(
+        rna_subject,
+        '_',
+        visit,
+        "_T1",
+        ".haplotypecaller.filtered.gds"
+      )
+    )) %>%
+    mutate(chr='1') %>%
+    mutate(dna=file.path('/scratch/mblab/lisa.liao/human/staar/src/custom_scripts/agds',
+                         paste0('LLFS.WGS.freeze5.chr',chr,'.gds'))) %>%
+    dplyr::rename(rna_visit=visit) %>%
+    mutate(rna_visit = str_remove(rna_visit,'visit')) %>%
+    dplyr::select(rna_subject,rna_visit,dna_subject,rna,chr,dna)
+
+}
+
+sex_mislabel_tmp = map(seq(1,nrow(suspicious_sex_samples_set)),
+                       ~create_sex_mislabels_comparison(suspicious_sex_samples_set[.,])) %>%
+  do.call('rbind',.)
+
+all_all_sex_mislabel_lookup = comparison_lookup_maker(sex_mislabel_tmp)
+
+write_tsv(all_all_sex_mislabel_lookup,
+          "/mnt/scratch/llfs_rna_dna_compare_test/sex_mislabel_all_comparison.tsv",
+          col_names = FALSE)
+
+dna_subjects =
+  pedigree %>%
+  filter(subject %in% bam_df$subject) %>%
+  pull(subject)
+
+sex_mislabel_tmp = map(seq(1,nrow(suspicious_sex_samples_set)),
+                       ~all_by_all_comparison(suspicious_sex_samples_set[.,], dna_subjects)) %>%
   do.call('rbind',.)
 
 sex_mislabel_lookup = sex_mislabel_tmp %>%
-  mutate(rna = file.path('/scratch/mblab/chasem/llfs_rna_dna_compare_test',
-                         paste0(rna_subject,'_',visit,"_T1",".haplotypecaller.filtered.gds"))) %>%
+  mutate(rna = file.path(
+    '/scratch/mblab/chasem/llfs_rna_dna_compare_test',
+    paste0(
+      rna_subject,
+      '_',
+      visit,
+      "_T1",
+      ".haplotypecaller.filtered.gds"
+    )
+  )) %>%
   mutate(count = rep(22,nrow(sex_mislabel_tmp))) %>%
   uncount(count) %>%
   group_by(rna_subject,dna_subject,visit) %>%
@@ -125,7 +204,7 @@ sex_mislabel_lookup = sex_mislabel_tmp %>%
   mutate(rna_visit = str_remove(rna_visit,'visit')) %>%
   dplyr::select(rna_subject,rna_visit,dna_subject,rna,chr,dna)
 
-write_tsv(sex_mislabel_lookup,
-          "/mnt/scratch/llfs_rna_dna_compare_test/sex_mislabel_compare_lookup.tsv",
-          col_names = FALSE)
+# write_tsv(sex_mislabel_lookup,
+#           "/mnt/scratch/llfs_rna_dna_compare_test/sex_mislabel_compare_lookup.tsv",
+#           col_names = FALSE)
 

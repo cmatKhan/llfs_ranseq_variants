@@ -93,6 +93,22 @@ x = compare_results_df %>%
   left_join(distinct(pedigree,subject,gpedid,relative,control),by = c('dna_sample' = 'subject')) %>%
   dplyr::rename(dna_ped = gpedid,dna_related = relative, dna_control = control)
 
+summarized_compare_df = compare_results_df %>%
+  mutate(group = paste(rna_sample,rna_visit,dna_sample,sep="_")) %>%
+  mutate(group = ifelse(rna_sample == dna_sample, paste0(group,'_same'), paste0(group,'_diff'))) %>%
+  group_by(group) %>%
+  summarize(total_variants = sum(overlap_fltr),
+            total_fltr_match = sum(n_match_fltr),
+            total_homo_expr_cand_fltr = sum(homo_expr_cand_fltr)) %>%
+  mutate(match_ratio = total_fltr_match/total_variants) %>%
+  mutate(same_sample = str_detect(group,"_same"), TRUE, FALSE)
+
+summarized_compare_df %>%
+  ggplot(aes(same_sample,match_ratio)) +
+  geom_boxplot() +
+  ggtitle('chr1-22') +
+  coord_cartesian(ylim =  c(0,1))
+
 compare_results_df %>%
   group_by(dna_sample,rna_sample) %>%
   mutate(same_sample = rna_sample==dna_sample) %>%
