@@ -87,6 +87,12 @@ compare_results = Sys.glob("/mnt/scratch/llfs_rna_dna_compare_test/*/*_match_met
 compare_results_df = map(compare_results,read_csv) %>%
   do.call('rbind',.)
 
+# write_rds(compare_results_df, "data/complete_visit1_same_same_20230201.rds")
+
+# write_rds(compare_results_df, "data/intermediate_all_same_compare_20230124.rds")
+
+#compare_results_df = readRDS("data/intermediate_all_same_compare_20230124.rds")
+
 x = compare_results_df %>%
   left_join(distinct(pedigree,subject,gpedid,relative,control),by = c('rna_sample' = 'subject')) %>%
   dplyr::rename(rna_ped = gpedid,rna_related = relative, rna_control = control) %>%
@@ -131,3 +137,27 @@ compare_results_df %>%
   ggplot(aes(same_sample,filtered_match_ratio)) + geom_boxplot() +
   ggtitle('chr 21 only') +
   coord_cartesian(ylim =  c(0,1))
+
+remaining_comparisons = comparisons_all %>%
+  filter(!rna_visit %in% c('11221_1','11221_2',
+                          '20686_1','20686_2',
+                          '20825_2',
+                          '20903_1','20903_2',
+                          '21389_2',
+                          '25785_1','25785_2',
+                          '26715_1',
+                          '3751_2',
+                          '4263_2',
+                          '4307_2')) %>%
+  unite(tmp, c('rna_visit','dna_subject'),remove=FALSE)
+
+already_compared = summarized_compare_df %>%
+  separate(group, c('rna','visit','dna','label')) %>%
+  unite(tmp,c('rna','visit','dna'))
+
+remaining_comparisons %>%
+  filter(!tmp %in% already_compared$tmp) %>%
+  select(-tmp) %>%
+  separate(rna_visit,c('rna_subject','rna_visit')) %>%
+  write_tsv("/mnt/scratch/llfs_rna_dna_compare_test/lookups/sex_mislabel_all_comparison_remaining_20220109.tsv",
+            col_names = FALSE)

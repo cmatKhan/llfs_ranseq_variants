@@ -2,7 +2,7 @@ library(tidyverse)
 library(here)
 library(RSQLite)
 
-con = dbConnect(RSQLite::SQLite(), "~/projects/llfs/compile_database/data/pheno_data_202007.sqlite")
+con = dbConnect(RSQLite::SQLite(), "/mnt/lts/personal/chasem/llfs/compile_database/data/pheno_data_202007.sqlite")
 
 whatdatall = tbl(con,"whatdatall") %>%
   collect()
@@ -26,19 +26,52 @@ bam_df = df %>%
       filter(!is.na(subject))) %>%
   left_join(pedigree)
 
-visit_1_bam_df = bam_df %>%
-  filter(visit == 'visit1')
+visit_split_bam_df = bam_df %>%
+  group_by(visit) %>%
+  group_split()
 
-chunk <- 60
-n <- nrow(visit_1_bam_df)
-r  <- rep(1:ceiling(n/chunk),each=chunk)[1:n]
-visit_1_bam_split <- split(visit_1_bam_df,r)
+names(visit_split_bam_df) = unlist(map(visit_split_bam_df, ~unique(pull(.,visit))))
 
-map(names(visit_1_bam_split),
-    ~write_csv(select(visit_1_bam_split[[.]],'path'),
-               file.path("/mnt/scratch/llfs_variant_calling/lookups",
-                         paste0("chunk_",as.character(.))),
+#' split a dataframe into chunk_size parts, so if there are 120 rows
+#' and chunk_size is 60, you'd get two sets of 60 each. Last set might be
+#' less than chunk_size. Names of each chunk in the returned list is the
+#' iterated number of that chunk
+create_chunks = function(subset_bam_df,chunk_size){
+
+  n <- nrow(subset_bam_df)
+
+  r <- rep(1:ceiling(n/chunk_size), each=chunk_size)[1:n]
+
+  # for each of the subsets, copy the rows and rbind -- add the suffix
+  # .bai to those copied rows. this will allow pulling both the
+  # bam and the bai
+   split(subset_bam_df,r) %>%
+     map(~rbind(.,mutate(.,path = paste0(path,'.bai'))))
+
+}
+
+#' write chunks to remote mount. file prefix is what comes before the
+#' chunk number, eg if visit_prefix is visit_2_chunk_ then the chunks
+#' would get named visit_2_chunk_1 visit_2_chunk_2 ...
+write_chunks = function(chunked_bam_df,
+                        file_prefix,
+                        output_dir ="/mnt/scratch/llfs_variant_calling/lookups"){
+
+  map(names(chunked_bam_df),
+    ~write_csv(select(chunked_bam_df[[.]],'path'),
+               file.path(output_dir,
+                         paste0(file_prefix,as.character(.))),
                col_names = FALSE))
+
+}
+
+visit_1_bam_split = create_chunks(visit_split_bam_df$visit1, 60)
+
+visit_2_bam_split = create_chunks(visit_split_bam_df$visit2, 100)
+
+write_chunks(visit_2_bam_split, 'visit_2_chunk_')
+
+
 
 suspicious_sex_samples_set = suspicious_sex_samples %>%
   left_join(bam_df,by=c('id','subject','visit','sex'))
@@ -87,9 +120,9 @@ create_samplesheet_from_dir = function(bam_list, include_visit=FALSE){
     dplyr::select(df,sample,fastq_1,fastq_2,strandedness,bam)
 }
 
-chunk='chunk_3'
+chunk='chunk_4'
 bam_list = Sys.glob(paste0('/mnt/scratch/llfs_variant_calling/data/',chunk,'/*bam'))
-visit_chunk_samplesheet = create_samplesheet_from_dir(bam_list, include_visit = TRUE)
+visit_chunk_samplesheet = create_samplesheet_from_dir(bam_list, whatdatall, include_visit = TRUE)
 
 write_csv(visit_chunk_samplesheet, paste0("/mnt/scratch/llfs_variant_calling/samplesheet/visit_1_",chunk,"_samplesheet.csv"))
 #
