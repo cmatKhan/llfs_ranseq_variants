@@ -21,7 +21,6 @@ WORKDIR /project
 COPY renv.lock renv.lock
 
 RUN mkdir -p renv
-COPY .Rprofile .Rprofile
 COPY renv/activate.R renv/activate.R
 COPY renv/settings.dcf renv/settings.dcf
 

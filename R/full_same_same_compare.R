@@ -6,9 +6,14 @@ library(tidyverse)
 library(RSQLite)
 library(readxl)
 
+llfs_gds <- seqOpen("data/LLFS.WGS.freeze5.chr21.gds")
+wgs_sample_ids <- seqGetData(llfs_gds, "sample.id")
+seqClose(llfs_gds)
+
 generate_same_same_lookup = function(
     write_scratch_lookup = FALSE,
     write_local_missing_dna_data = FALSE){
+
   llfs_gds <- seqOpen("data/LLFS.WGS.freeze5.chr21.gds")
   wgs_sample_ids <- seqGetData(llfs_gds, "sample.id")
   seqClose(llfs_gds)
@@ -149,6 +154,14 @@ gather_data_from_scratch = function(){
     do.call('rbind',.)
 }
 
+gather_data_from_genoarr = function(){
+  compare_results = Sys.glob("/mnt/scratch/llfs_rna_dna_compare_test/genoarr_comp/*/*_match_metrics.csv")
+
+  map(compare_results,read_csv) %>%
+    do.call('rbind',.)
+}
+
+
 complete_visit1_same_same <-
   readRDS("data/complete_visit1_same_same_20230201.rds")
 
@@ -164,7 +177,12 @@ parsed_s3 = generate_same_same_lookup()
 
 #full_same_same_comp = gather_data_from_scratch()
 #write_csv(full_same_same_comp,"data/full_same_same_comp_20230218.csv")
-#full_same_same_comp = read_csv("data/full_same_same_comp_20230218.csv")
+full_same_same_comp = read_csv("data/full_same_same_comp_20230220.csv")
+
+full_same_same_genoarr = gather_data_from_genoarr()
+
+summary_full_same_same_genoarr = summarize_comparisons(full_same_same_genoarr)%>%
+  select(-c(same_sample, `TRUE`, `FALSE`))
 
 summary_full_same_same_comp = summarize_comparisons(full_same_same_comp) %>%
   select(-c(same_sample, `TRUE`, `FALSE`))
@@ -212,31 +230,120 @@ match_summary %>%
 all_by_all_candidates =
   filter(match_summary, match_level != 'positive') %>%
   mutate(sex_mislabel = subject %in% unique(sex_mislabels$subject)) %>%
-  filter(!sex_mislabel)
+  filter(!sex_mislabel) %>%
+  select(subject,visit) %>%
+  # add a mislabel from the genoarr data
+  rbind(tibble(subject = rep('14547',2), visit = paste0('visit_',seq(1,2)))) %>%
+  left_join(parsed_s3$lookup) %>%
+  select(subject,visit,vcf) %>%
+  dplyr::rename(rna_gds = vcf) %>%
+  mutate(rna_gds = str_replace(rna_gds,'.vcf.gz','.gds'))
 
 rna_metadata = read_csv("data/20221212_rnaseq_metadata.csv") %>%
   mutate(visit = ifelse(visit == 'visit1', 'visit_1', visit)) %>%
   mutate(visit = ifelse(visit == 'visit2', 'visit_2', visit))
 
-chunk9 = read_csv("/mnt/scratch/llfs_variant_calling/samplesheet/completed/visit_2_chunk_9_samplesheet.csv") %>%
-  separate(sample, c('subject','visit')) %>%
-  mutate(visit = 'visit_2')
+wgs_in_rna = rna_metadata %>%
+  filter(subject %in% wgs_sample_ids) %>%
+  distinct(subject) %>%
+  pull(subject)
 
-x = parsed_s3$lookup %>%
-  right_join(chunk9)
+create_all_by_all_lookup = function(row){
 
-full_same_same_comp %>%
-  dplyr::rename(subject = rna_sample, visit = rna_visit) %>%
-  mutate(subject = as.character(subject),
-         chr = as.character(chr)) %>%
-  full_join(rna_metadata) %>%
-  filter(is.na(chr)) %>%
-  filter(visit != 'control') %>%
-  left_join(parsed_s3$s3_vcf_all) %>%
-  group_by(in_genoarr_dna) %>%
-  tally()
+  tibble(rna_subject = row[['subject']],
+         visit=row[['visit']],
+         rna_gds = row[['rna_gds']],
+         wgs_dna = wgs_in_rna)
 
+}
 
+all_by_all_subj_lookup = apply(all_by_all_candidates,1,create_all_by_all_lookup) %>%
+  do.call('rbind',.) %>%
+  mutate(visit = str_remove(visit,'visit_'))
+
+all_by_all_subj_lookup_split = all_by_all_subj_lookup %>%
+  group_split(grp = as.integer(gl(n(), 10000, n())), .keep = FALSE)
+
+names(all_by_all_subj_lookup_split) =
+  as.character(seq(1,length(all_by_all_subj_lookup_split)))
+
+gather_data_from_all_by_all = function(){
+  compare_results = Sys.glob("/mnt/scratch/llfs_rna_dna_compare_test/all_by_all_wgs/*/*_match_metrics.csv")
+
+  map(compare_results,read_csv) %>%
+    do.call('rbind',.)
+}
+
+#all_by_all_metrics = gather_data_from_all_by_all()
+#all_by_all_metrics %>% write_csv("data/all_by_all_metrics_attempt1_20230221.csv")
+all_by_all_metrics = read_csv("data/all_by_all_metrics_attempt1_20230221.csv") %>%
+  dplyr::rename(visit = rna_visit,
+                rna_subject = rna_sample,
+                wgs_dna = dna_sample) %>%
+  mutate(visit = as.character(visit),
+         rna_subject = as.character(rna_subject),
+         wgs_dna = as.character(wgs_dna))
+
+x = all_by_all_subj_lookup %>%
+  left_join(all_by_all_metrics)
+
+y = x %>%
+  filter(!complete.cases(.)) %>%
+  group_by(rna_subject,visit) %>%
+  group_split()
+
+name_y = function(df){
+  df %>%
+    distinct(rna_subject,visit) %>%
+    as.character() %>%
+    paste(collapse='_') %>%
+    paste('rna',.,sep="_")
+}
+
+names(y) = unlist(map(y,name_y))
+
+y = map(y,~distinct(.,wgs_dna))
+
+lookups_output = "/mnt/scratch/llfs_rna_dna_compare_test/all_by_all_wgs/lookups"
+map(names(y), ~write_tsv(y[[.]],
+                         file.path(lookups_output,paste0(.,'.txt')),
+                         col_names = FALSE))
+
+z = x %>%
+  filter(!complete.cases(.)) %>%
+  group_by(rna_subject,visit) %>%
+  group_split() %>%
+  map(distinct,rna_subject,visit,rna_gds) %>%
+  do.call('rbind',.) %>%
+  write_tsv(file.path(lookups_output,"rna_subj_lookup.txt"),col_names = FALSE)
+
+# map(names(all_by_all_subj_lookup_split),
+#     ~write_tsv(all_by_all_subj_lookup_split[[.]],
+#                paste0("/mnt/scratch/llfs_rna_dna_compare_test/",
+#                       "all_by_all_wgs/lookups/subject_lookup_",
+#                       as.character(.),
+#                       ".txt"),
+#             col_names = FALSE))
+#
+# chunk9 = read_csv("/mnt/scratch/llfs_variant_calling/samplesheet/completed/visit_2_chunk_9_samplesheet.csv") %>%
+#   separate(sample, c('subject','visit')) %>%
+#   mutate(visit = 'visit_2')
+#
+# x = parsed_s3$lookup %>%
+#   right_join(chunk9)
+#
+# full_same_same_comp %>%
+#   dplyr::rename(subject = rna_sample, visit = rna_visit) %>%
+#   mutate(subject = as.character(subject),
+#          chr = as.character(chr)) %>%
+#   full_join(rna_metadata) %>%
+#   filter(is.na(chr)) %>%
+#   filter(visit != 'control') %>%
+#   left_join(parsed_s3$s3_vcf_all) %>%
+#   filter(in_genoarr_dna) %>%
+#   mutate(vcf_index = paste0(vcf,".tbi")) %>%
+#   select(vcf,vcf_index, subject,visit) %>%
+#   write_tsv("/mnt/scratch/llfs_rna_dna_compare_test/genoarr_comp/subject_lookup.txt")
 
 
 
