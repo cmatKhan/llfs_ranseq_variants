@@ -1,13 +1,14 @@
 #!/usr/bin/env Rscript
 
+library(futile.logger)
 library(optparse)
-library(tidyverse)
 library(furrr)
 library(future)
+library(tidyverse)
 
 # GLOBALS ---------------------------------------------------------------------
 
-TEST = TRUE
+TEST = FALSE
 
 # cmd line argument parser ----------------------------------------------------
 
@@ -19,6 +20,10 @@ parser <- add_option(parser, c("-q", "--quietly"), action="store_false",
 parser <- add_option(parser, c("--dir"), type="character",
                      default=".",
                      help="directory to search",
+                     metavar ="'directory'")
+parser <- add_option(parser, c("--cpus"), type="integer",
+                     default=10,
+                     help="number of CPUs",
                      metavar ="'directory'")
 parser <- add_option(parser, c("--output"), type="character",
                      default="compiled_metrics.csv",
@@ -32,28 +37,35 @@ opt = if(TEST){
   parse_args(parser,
              args = c(
                "--quietly",
+               "--cpus=10",
                "--dir=/mnt/scratch/test_dir"))
 } else{
   parse_args(parser)
 }
 
+futile.logger::flog.info(sprintf('setting up parallel env with %s cpus', opt$cpus))
+
 future::plan(
   future::multisession,
-  workers=10
+  workers=as.integer(opt$cpus)
 )
 
-gather_data_from_all_by_all = function(){
-  compare_results = list.files(
-    opt$dir,
-    "*_match_metrics.csv",
-    recursive = TRUE,
-    full.names = TRUE)
 
-  furrr::future_map(compare_results,read_csv) %>%
+gather_data_from_all_by_all = function(file_list){
+
+
+  furrr::future_map(file_list,read_csv) %>%
     do.call('rbind',.)
 }
 
-df = gather_data_from_all_by_all()
+metrics_file_list = list.files(
+  opt$dir,
+  "*_match_metrics.csv",
+  recursive = TRUE,
+  full.names = TRUE)
+
+futile.logger::flog.info(sprintf('reading in data from %s files', length(metrics_file_list)))
+df = gather_data_from_all_by_all(metrics_file_list)
 
 write_csv(df,opt$output)
 
