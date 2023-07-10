@@ -11,7 +11,7 @@ whatdatall = tbl(con,"whatdatall") %>%
 
 pedigree = read_csv("data/triplet_visit2_version3.csv")
 
-chunk='chunk_11'
+chunk='s6420'
 bam_list = Sys.glob(paste0('/mnt/scratch/llfs_variant_calling/data/',chunk,'/*bam'))
 visit_chunk_samplesheet = create_samplesheet_from_dir(
   bam_list,
@@ -19,9 +19,10 @@ visit_chunk_samplesheet = create_samplesheet_from_dir(
   include_visit = TRUE) %>%
   mutate(sample = ifelse(
     str_detect(sample,"^NA"),
-    paste0(str_extract(basename(bam), "^\\d+"), "_visit2"), sample))
+    paste0(str_extract(basename(bam), "^\\d+"), "_vist_\\d"), sample)) %>%
+  mutate(sample = str_replace(sample, 'vist', 'visit'))
 
-write_csv(visit_chunk_samplesheet, paste0("/mnt/scratch/llfs_variant_calling/samplesheet/visit_2_",chunk,"_samplesheet.csv"))
+write_csv(visit_chunk_samplesheet, paste0("/mnt/scratch/llfs_variant_calling/samplesheet/",chunk,"_samplesheet.csv"))
 
 dbDisconnect(con)
 

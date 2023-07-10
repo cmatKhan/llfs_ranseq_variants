@@ -33,10 +33,10 @@ opt = parse_args(parser)
 x = foreach(
   i = names(opt)
 ) %do% {
-  input_value=opt[[i]]
+  input_value=trimws(opt[[i]])
   if(input_value==''){
     stop(sprintf("ARGUMENT --%s IS REQUIRED",i))
-  }else if(i %in% c('vcf')){
+  }else if(i %in% c('vcf', 'vcf.gz')){
     if(!file.exists(input_value)){
       stop(sprintf("FILE %s DOES NOT EXIST",input_value))
     }
