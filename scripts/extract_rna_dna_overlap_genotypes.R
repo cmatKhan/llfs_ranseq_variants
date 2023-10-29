@@ -285,21 +285,22 @@ sample_similarity_metric = tibble(
   homo_expr_cand_fltr = homo_expr_cand_fltr
 )
 
+
 output_dir  = paste('rna',opt$rna_sample,sep="_")
-dir.create(output_dir,showWarnings=FALSE)
+system_output_dir = file.path(opt$output_prefix,output_dir)
+dir.create(system_output_dir,recursive=TRUE,showWarnings=TRUE)
+
 file_name = paste('visit', opt$rna_visit, 'chr',opt$chr, opt$dna_sample, sep = "_")
 
 # write full comparison df if -f is set
 if(opt$write_full_comparison){
   write_csv(compare_df,
-            file.path(opt$output_prefix,
-                      output_dir,
+            file.path(system_output_dir,
                       paste0(file_name,"_comparison.csv")))
 }
 # write summarized match metric
 write_csv(sample_similarity_metric,
-          file.path(opt$output_prefix,
-                    output_dir,
+          file.path(system_output_dir,
                     paste0(file_name,"_match_metrics.csv")))
 
 # this is part of profvis -- uncomment this for resource profiling during testing
